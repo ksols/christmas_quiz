@@ -37,12 +37,14 @@ export default function WaitingClient({ userName, userId }: WaitingClientProps) 
                             console.log('SSE connection established:', data.clientId)
                             return
                         }
-                    } catch {
-                        // If parsing fails, treat as plain text message
-                        if (event.data === 'START_GAME') {
+
+                        // Handle start game message
+                        if (data.type === 'START_GAME') {
                             console.log('Redirecting to game...')
                             router.push(`/game?userId=${userId}`)
                         }
+                    } catch (error) {
+                        console.error('Error parsing SSE message:', error)
                     }
                 }
 

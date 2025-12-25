@@ -60,9 +60,20 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
             try {
                 const data = JSON.parse(event.data)
                 
-                if (data.type === 'ANSWER_SUBMITTED' || data.type === 'ANSWER_UPDATED') {
-                    console.log('Answer event received:', data)
-                    setLastUpdate(new Date().toLocaleTimeString('nb-NO'))
+                if (data.type === 'ANSWER_SUBMITTED' || data.type === 'ANSWER_UPDATED' || data.type === 'USER_CREATED') {
+                    console.log('Event received:', data)
+                    const eventTime = new Date().toLocaleTimeString('nb-NO')
+                    
+                    let updateMessage = ''
+                    if (data.type === 'USER_CREATED') {
+                        updateMessage = `New user joined: ${data.userName} at ${eventTime}`
+                    } else if (data.type === 'ANSWER_SUBMITTED') {
+                        updateMessage = `New answer received at ${eventTime}`
+                    } else if (data.type === 'ANSWER_UPDATED') {
+                        updateMessage = `Answer updated at ${eventTime}`
+                    }
+                    
+                    setLastUpdate(updateMessage)
                     // Refresh the page data
                     router.refresh()
                 }
@@ -91,7 +102,12 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: 'START_GAME' }),
+                body: JSON.stringify({ 
+                    message: JSON.stringify({ 
+                        type: 'START_GAME',
+                        timestamp: new Date().toISOString()
+                    }) 
+                }),
             })
 
             if (response.ok) {
@@ -135,7 +151,7 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
                         <div className="flex items-center gap-2">
                             <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                             <p className="text-blue-900 dark:text-blue-100 font-medium">
-                                🔴 Live Update: New answer received at {lastUpdate}
+                                🔴 Live Update: {lastUpdate}
                             </p>
                         </div>
                     </div>

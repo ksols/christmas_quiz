@@ -17,12 +17,34 @@ export async function createUser(formData: FormData) {
         },
     })
 
+    let isNewUser = false
     if (!user) {
         user = await prisma.user.create({
             data: {
                 name: name,
             } as any,
         })
+        isNewUser = true
+    }
+
+    // Broadcast user creation event to dashboard
+    if (isNewUser) {
+        try {
+            await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/broadcast`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    message: JSON.stringify({ 
+                        type: 'USER_CREATED', 
+                        userId: user.id,
+                        userName: user.name,
+                        timestamp: new Date().toISOString()
+                    }) 
+                }),
+            })
+        } catch (error) {
+            console.error('Failed to broadcast user creation:', error)
+        }
     }
 
     redirect(`/waiting?userId=${user.id}`)

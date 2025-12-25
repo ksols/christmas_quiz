@@ -33,8 +33,6 @@ export async function createUser(formData: FormData) {
             ? `https://${process.env.VERCEL_URL}` 
             : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
         
-        console.log('[createUser] Broadcasting to:', baseUrl, 'VERCEL_URL:', process.env.VERCEL_URL)
-        
         fetch(`${baseUrl}/api/broadcast`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

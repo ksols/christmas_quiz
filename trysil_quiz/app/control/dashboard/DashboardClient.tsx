@@ -52,45 +52,25 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
     const groupedAnswers = getGroupedAnswers()
     const maxRounds = Math.max(0, ...Object.keys(groupedAnswers).map(Number))
 
-    // Connect to SSE for live updates
+    // Poll for updates every 3 seconds (works reliably on Vercel)
     useEffect(() => {
-        const eventSource = new EventSource('/api/events')
-
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data)
-                
-                if (data.type === 'ANSWER_SUBMITTED' || data.type === 'ANSWER_UPDATED' || data.type === 'USER_CREATED') {
-                    console.log('Event received:', data)
-                    const eventTime = new Date().toLocaleTimeString('nb-NO')
-                    
-                    let updateMessage = ''
-                    if (data.type === 'USER_CREATED') {
-                        updateMessage = `New user joined: ${data.userName} at ${eventTime}`
-                    } else if (data.type === 'ANSWER_SUBMITTED') {
-                        updateMessage = `New answer received at ${eventTime}`
-                    } else if (data.type === 'ANSWER_UPDATED') {
-                        updateMessage = `Answer updated at ${eventTime}`
-                    }
-                    
-                    setLastUpdate(updateMessage)
-                    // Refresh the page data
-                    router.refresh()
-                }
-            } catch (error) {
-                console.error('Error parsing SSE message:', error)
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                router.refresh()
             }
-        }
-
-        eventSource.onerror = (error) => {
-            console.error('SSE connection error:', error)
-            eventSource.close()
-        }
+        }, 3000)
 
         return () => {
-            eventSource.close()
+            clearInterval(interval)
         }
     }, [router])
+
+    // Update timestamp when data changes
+    useEffect(() => {
+        if (users.length > 0) {
+            setLastUpdate(`Last updated: ${new Date().toLocaleTimeString('nb-NO')}`)
+        }
+    }, [users])
 
     const handleStartGame = async () => {
         setIsSending(true)

@@ -1,6 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import DashboardClient from './DashboardClient'
 
+// Disable caching to always fetch fresh data
+export const revalidate = 0
+
 export default async function DashboardPage() {
     const users = await prisma.user.findMany({
         orderBy: {

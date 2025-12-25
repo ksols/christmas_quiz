@@ -1,7 +1,8 @@
 'use client'
 
 import { prisma } from '@/lib/prisma'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface User {
     id: string
@@ -14,9 +15,71 @@ interface DashboardClientProps {
     users: User[]
 }
 
-export default function DashboardClient({ users }: DashboardClientProps) {
+export default function DashboardClient({ users: initialUsers }: DashboardClientProps) {
     const [isSending, setIsSending] = useState(false)
     const [message, setMessage] = useState('')
+    const [users, setUsers] = useState(initialUsers)
+    const [lastUpdate, setLastUpdate] = useState<string | null>(null)
+    const router = useRouter()
+
+    // Update users when initialUsers changes
+    useEffect(() => {
+        setUsers(initialUsers)
+    }, [initialUsers])
+
+    // Group answers by round/question number
+    const getGroupedAnswers = () => {
+        const answersByRound: { [key: number]: { userId: string; userName: string; text: string; createdAt: Date }[] } = {}
+        
+        users.forEach(user => {
+            user.answers.forEach((answer, index) => {
+                const roundNumber = index + 1
+                if (!answersByRound[roundNumber]) {
+                    answersByRound[roundNumber] = []
+                }
+                answersByRound[roundNumber].push({
+                    userId: user.id,
+                    userName: user.name || 'N/A',
+                    text: answer.text,
+                    createdAt: answer.createdAt
+                })
+            })
+        })
+        
+        return answersByRound
+    }
+
+    const groupedAnswers = getGroupedAnswers()
+    const maxRounds = Math.max(0, ...Object.keys(groupedAnswers).map(Number))
+
+    // Connect to SSE for live updates
+    useEffect(() => {
+        const eventSource = new EventSource('/api/events')
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data)
+                
+                if (data.type === 'ANSWER_SUBMITTED' || data.type === 'ANSWER_UPDATED') {
+                    console.log('Answer event received:', data)
+                    setLastUpdate(new Date().toLocaleTimeString('nb-NO'))
+                    // Refresh the page data
+                    router.refresh()
+                }
+            } catch (error) {
+                console.error('Error parsing SSE message:', error)
+            }
+        }
+
+        eventSource.onerror = (error) => {
+            console.error('SSE connection error:', error)
+            eventSource.close()
+        }
+
+        return () => {
+            eventSource.close()
+        }
+    }, [router])
 
     const handleStartGame = async () => {
         setIsSending(true)
@@ -64,6 +127,17 @@ export default function DashboardClient({ users }: DashboardClientProps) {
                 {message && (
                     <div className="mb-6 p-4 bg-white dark:bg-zinc-900 rounded-lg shadow-md border-l-4 border-green-500">
                         <p className="text-gray-900 dark:text-gray-100 font-medium">{message}</p>
+                    </div>
+                )}
+
+                {lastUpdate && (
+                    <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg shadow-md border-l-4 border-blue-500">
+                        <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                            <p className="text-blue-900 dark:text-blue-100 font-medium">
+                                🔴 Live Update: New answer received at {lastUpdate}
+                            </p>
+                        </div>
                     </div>
                 )}
 
@@ -143,6 +217,66 @@ export default function DashboardClient({ users }: DashboardClientProps) {
                                 {users[0]?.name || 'N/A'}
                             </p>
                         </div>
+                    </div>
+                )}
+
+                {/* Answers Grouped by Round/Question */}
+                {maxRounds > 0 && (
+                    <div className="mt-8 space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            Answers by Question
+                        </h2>
+                        
+                        {Array.from({ length: maxRounds }, (_, i) => i + 1).map(roundNumber => {
+                            const answers = groupedAnswers[roundNumber] || []
+                            if (answers.length === 0) return null
+                            
+                            return (
+                                <div key={roundNumber} className="bg-white dark:bg-zinc-900 rounded-lg shadow-md overflow-hidden">
+                                    <div className="px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600">
+                                        <h3 className="text-xl font-bold text-white">
+                                            Question {roundNumber} ({answers.length} {answers.length === 1 ? 'answer' : 'answers'})
+                                        </h3>
+                                    </div>
+                                    
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-zinc-800">
+                                            <thead className="bg-gray-50 dark:bg-zinc-800">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/4">
+                                                        User
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Answer
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
+                                                        Submitted At
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white dark:bg-zinc-900 divide-y divide-gray-200 dark:divide-zinc-800">
+                                                {answers.map((answer, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                            {answer.userName}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                                            {answer.text}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                            {new Date(answer.createdAt).toLocaleString('nb-NO', {
+                                                                dateStyle: 'short',
+                                                                timeStyle: 'short',
+                                                            })}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
             </div>

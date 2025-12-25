@@ -13,40 +13,46 @@ export default function WaitingClient({ userName, userId }: WaitingClientProps) 
     const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
 
     useEffect(() => {
-        let ws: WebSocket | null = null
+        let eventSource: EventSource | null = null
         let reconnectTimeout: NodeJS.Timeout
 
         const connect = () => {
             try {
-                // Connect to WebSocket on port 3001
-                ws = new WebSocket(`ws://${window.location.hostname}:3001`)
+                // Connect to SSE endpoint
+                eventSource = new EventSource('/api/events')
 
-                ws.onopen = () => {
-                    console.log('Connected to WebSocket')
+                eventSource.onopen = () => {
+                    console.log('Connected to SSE')
                     setConnectionStatus('connected')
                 }
 
-                ws.onmessage = (event) => {
+                eventSource.onmessage = (event) => {
                     console.log('Received message:', event.data)
 
-                    if (event.data === 'START_GAME') {
-                        console.log('Redirecting to game...')
-                        router.push(`/game?userId=${userId}`)
+                    try {
+                        const data = JSON.parse(event.data)
+                        
+                        // Handle connection message
+                        if (data.type === 'connected') {
+                            console.log('SSE connection established:', data.clientId)
+                            return
+                        }
+                    } catch {
+                        // If parsing fails, treat as plain text message
+                        if (event.data === 'START_GAME') {
+                            console.log('Redirecting to game...')
+                            router.push(`/game?userId=${userId}`)
+                        }
                     }
                 }
 
-                ws.onerror = (error) => {
-                    // WebSocket errors are often non-critical and followed by onclose
-                    // Only log in development, don't change connection status here
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn('WebSocket error event (may be non-critical):', error)
-                    }
-                    // Let onclose handle the connection status change
-                }
-
-                ws.onclose = () => {
-                    console.log('Disconnected from WebSocket')
+                eventSource.onerror = () => {
+                    console.log('SSE connection error')
                     setConnectionStatus('disconnected')
+                    
+                    if (eventSource) {
+                        eventSource.close()
+                    }
 
                     // Attempt to reconnect after 3 seconds
                     reconnectTimeout = setTimeout(() => {
@@ -55,7 +61,7 @@ export default function WaitingClient({ userName, userId }: WaitingClientProps) 
                     }, 3000)
                 }
             } catch (error) {
-                console.error('Failed to create WebSocket:', error)
+                console.error('Failed to create EventSource:', error)
                 setConnectionStatus('disconnected')
             }
         }
@@ -63,8 +69,8 @@ export default function WaitingClient({ userName, userId }: WaitingClientProps) 
         connect()
 
         return () => {
-            if (ws) {
-                ws.close()
+            if (eventSource) {
+                eventSource.close()
             }
             if (reconnectTimeout) {
                 clearTimeout(reconnectTimeout)

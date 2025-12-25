@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { WebSocket } from 'ws'
+import { sseManager } from '@/lib/sse-manager'
 
 export async function POST(req: NextRequest) {
     try {
@@ -12,26 +12,8 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Access the global WebSocket server
-        const wss = (global as any).wss
-
-        if (!wss) {
-            return NextResponse.json(
-                { error: 'WebSocket server not initialized' },
-                { status: 503 }
-            )
-        }
-
-        // Broadcast to all connected clients
-        let clientCount = 0
-        wss.clients.forEach((client: WebSocket) => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(message)
-                clientCount++
-            }
-        })
-
-        console.log(`Broadcasted "${message}" to ${clientCount} clients`)
+        // Broadcast to all connected SSE clients
+        const clientCount = sseManager.broadcast(message)
 
         return NextResponse.json({
             success: true,

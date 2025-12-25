@@ -27,29 +27,27 @@ export async function createUser(formData: FormData) {
         isNewUser = true
     }
 
-    // Broadcast user creation event to dashboard
+    // Broadcast user creation event to dashboard (fire and forget)
     if (isNewUser) {
-        try {
-            const baseUrl = process.env.VERCEL_URL 
-                ? `https://${process.env.VERCEL_URL}` 
-                : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
-            
-            await fetch(`${baseUrl}/api/broadcast`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    message: JSON.stringify({ 
-                        type: 'USER_CREATED', 
-                        userId: user.id,
-                        userName: user.name,
-                        timestamp: new Date().toISOString()
-                    }) 
-                }),
-                cache: 'no-store'
-            })
-        } catch (error) {
-            console.error('Failed to broadcast user creation:', error)
-        }
+        const baseUrl = process.env.VERCEL_URL 
+            ? `https://${process.env.VERCEL_URL}` 
+            : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+        
+        console.log('[createUser] Broadcasting to:', baseUrl, 'VERCEL_URL:', process.env.VERCEL_URL)
+        
+        fetch(`${baseUrl}/api/broadcast`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                message: JSON.stringify({ 
+                    type: 'USER_CREATED', 
+                    userId: user.id,
+                    userName: user.name,
+                    timestamp: new Date().toISOString()
+                }) 
+            }),
+            cache: 'no-store'
+        }).catch(error => console.error('Failed to broadcast user creation:', error))
     }
 
     redirect(`/waiting?userId=${user.id}`)
@@ -67,28 +65,24 @@ export async function submitAnswer(userId: string, answerText: string) {
         } as any,
     })
 
-    // Broadcast the new answer event to dashboard
-    try {
-        const baseUrl = process.env.VERCEL_URL 
-            ? `https://${process.env.VERCEL_URL}` 
-            : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
-        
-        await fetch(`${baseUrl}/api/broadcast`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: JSON.stringify({ 
-                    type: 'ANSWER_SUBMITTED', 
-                    answerId: answer.id,
-                    userId: userId,
-                    timestamp: new Date().toISOString()
-                }) 
-            }),
-            cache: 'no-store'
-        })
-    } catch (error) {
-        console.error('Failed to broadcast answer submission:', error)
-    }
+    // Broadcast the new answer event to dashboard (fire and forget)
+    const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}` 
+        : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+    
+    fetch(`${baseUrl}/api/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            message: JSON.stringify({ 
+                type: 'ANSWER_SUBMITTED', 
+                answerId: answer.id,
+                userId: userId,
+                timestamp: new Date().toISOString()
+            }) 
+        }),
+        cache: 'no-store'
+    }).catch(error => console.error('Failed to broadcast answer submission:', error))
 
     return answer.id
 }
@@ -103,26 +97,22 @@ export async function updateAnswer(answerId: number, answerText: string) {
         data: { text: answerText } as any,
     })
 
-    // Broadcast the answer update event to dashboard
-    try {
-        const baseUrl = process.env.VERCEL_URL 
-            ? `https://${process.env.VERCEL_URL}` 
-            : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
-        
-        await fetch(`${baseUrl}/api/broadcast`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: JSON.stringify({ 
-                    type: 'ANSWER_UPDATED', 
-                    answerId: answer.id,
-                    userId: answer.userId,
-                    timestamp: new Date().toISOString()
-                }) 
-            }),
-            cache: 'no-store'
-        })
-    } catch (error) {
-        console.error('Failed to broadcast answer update:', error)
-    }
+    // Broadcast the answer update event to dashboard (fire and forget)
+    const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}` 
+        : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+    
+    fetch(`${baseUrl}/api/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            message: JSON.stringify({ 
+                type: 'ANSWER_UPDATED', 
+                answerId: answer.id,
+                userId: answer.userId,
+                timestamp: new Date().toISOString()
+            }) 
+        }),
+        cache: 'no-store'
+    }).catch(error => console.error('Failed to broadcast answer update:', error))
 }

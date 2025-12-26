@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { setActiveQuestion } from '@/app/actions'
+import { setActiveQuestion, setAnswerPoints } from '@/app/actions'
 
 interface User {
     id: string
@@ -44,7 +44,7 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
 
     // Group answers by question number
     const getGroupedAnswers = () => {
-        const answersByQuestion: { [key: number]: { userId: string; userName: string; text: string; createdAt: Date }[] } = {}
+        const answersByQuestion: { [key: number]: { id: number; userId: string; userName: string; text: string; createdAt: Date; points?: number }[] } = {}
         
         users.forEach(user => {
             user.answers.forEach((answer) => {
@@ -53,16 +53,33 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                         answersByQuestion[answer.questionNumber] = []
                     }
                     answersByQuestion[answer.questionNumber].push({
+                        id: answer.id,
                         userId: user.id,
                         userName: user.name || 'N/A',
                         text: answer.text,
-                        createdAt: answer.createdAt
+                        createdAt: answer.createdAt,
+                        points: answer.points
                     })
                 }
             })
         })
         
         return answersByQuestion
+    }
+
+    const handleSetPoints = async (answerId: number, points: number) => {
+        try {
+            await setAnswerPoints(answerId, points)
+            router.refresh()
+        } catch (error) {
+            console.error('Failed to set points:', error)
+        }
+    }
+
+    const getUserTotalPoints = (userId: string) => {
+        const user = users.find(u => u.id === userId)
+        if (!user) return 0
+        return user.answers.reduce((sum, answer) => sum + (answer.points || 0), 0)
     }
 
     const groupedAnswers = getGroupedAnswers()
@@ -243,12 +260,15 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                         Answers
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                        Total Points
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-zinc-900 divide-y divide-gray-200 dark:divide-zinc-800">
                                 {users.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                                             No users found
                                         </td>
                                     </tr>
@@ -270,6 +290,9 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 {user.answers.length}
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-gray-100">
+                                                {getUserTotalPoints(user.id)}
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -279,7 +302,7 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                 </div>
 
                 {users.length > 0 && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
                             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</h3>
                             <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100">{users.length}</p>
@@ -288,6 +311,12 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Answers</h3>
                             <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100">
                                 {users.reduce((acc, user) => acc + user.answers.length, 0)}
+                            </p>
+                        </div>
+                        <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
+                            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Points Awarded</h3>
+                            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100">
+                                {users.reduce((acc, user) => acc + getUserTotalPoints(user.id), 0)}
                             </p>
                         </div>
                         <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
@@ -329,7 +358,7 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                                         <table className="min-w-full divide-y divide-gray-200 dark:divide-zinc-800">
                                             <thead className="bg-gray-50 dark:bg-zinc-800">
                                                 <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/4">
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/5">
                                                         User
                                                     </th>
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -337,6 +366,9 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                                                     </th>
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
                                                         Submitted At
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/5">
+                                                        Points
                                                     </th>
                                                 </tr>
                                             </thead>
@@ -354,6 +386,23 @@ export default function DashboardClient({ users: initialUsers, gameState: initia
                                                                 dateStyle: 'short',
                                                                 timeStyle: 'short',
                                                             })}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex gap-1">
+                                                                {[3, 2, 1, 0].map(points => (
+                                                                    <button
+                                                                        key={points}
+                                                                        onClick={() => handleSetPoints(answer.id, points)}
+                                                                        className={`px-3 py-1 rounded font-semibold text-sm transition-colors ${
+                                                                            answer.points === points
+                                                                                ? 'bg-green-500 text-white'
+                                                                                : 'bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-zinc-600'
+                                                                        }`}
+                                                                    >
+                                                                        {points}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}

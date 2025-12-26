@@ -134,6 +134,19 @@ export async function updateAnswer(answerId: number, answerText: string) {
     }).catch(error => console.error('Failed to broadcast answer update:', error))
 }
 
+export async function setAnswerPoints(answerId: number, points: number) {
+    if (points < 0 || points > 3) {
+        throw new Error('Points must be between 0 and 3')
+    }
+
+    const answer = await prisma.answer.update({
+        where: { id: answerId },
+        data: { points } as any,
+    })
+
+    return answer
+}
+
 export async function getGameState() {
     let gameState = await prisma.gameState.findFirst()
     

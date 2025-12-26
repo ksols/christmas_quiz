@@ -99,7 +99,7 @@ export default function WaitingClient({ userName, userId }: WaitingClientProps) 
                     Venter på sjæfen...
                 </h1>
                 <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300">
-                    Hei {userName}! Ta en øl og len dere tilbake.
+                    {userName}! Ta en øl og len dere tilbake.
                 </p>
 
                 <div className="mt-12">

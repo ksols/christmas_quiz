@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { setActiveQuestion } from '@/app/actions'
 
 interface User {
     id: string
@@ -11,46 +12,61 @@ interface User {
     answers: any[]
 }
 
-interface DashboardClientProps {
-    users: User[]
+interface GameState {
+    id: number
+    currentQuestionNumber: number | null
+    status: string
+    updatedAt: Date
 }
 
-export default function DashboardClient({ users: initialUsers }: DashboardClientProps) {
+interface DashboardClientProps {
+    users: User[]
+    gameState: GameState | null
+}
+
+export default function DashboardClient({ users: initialUsers, gameState: initialGameState }: DashboardClientProps) {
     const [isSending, setIsSending] = useState(false)
     const [message, setMessage] = useState('')
     const [users, setUsers] = useState(initialUsers)
+    const [gameState, setGameState] = useState(initialGameState)
+    const [nextQuestionNumber, setNextQuestionNumber] = useState<number>(1)
     const [lastUpdate, setLastUpdate] = useState<string | null>(null)
     const router = useRouter()
 
-    // Update users when initialUsers changes
+    // Update users and gameState when props change
     useEffect(() => {
         setUsers(initialUsers)
-    }, [initialUsers])
+        setGameState(initialGameState)
+        if (initialGameState?.currentQuestionNumber) {
+            setNextQuestionNumber(initialGameState.currentQuestionNumber + 1)
+        }
+    }, [initialUsers, initialGameState])
 
-    // Group answers by round/question number
+    // Group answers by question number
     const getGroupedAnswers = () => {
-        const answersByRound: { [key: number]: { userId: string; userName: string; text: string; createdAt: Date }[] } = {}
+        const answersByQuestion: { [key: number]: { userId: string; userName: string; text: string; createdAt: Date }[] } = {}
         
         users.forEach(user => {
-            user.answers.forEach((answer, index) => {
-                const roundNumber = index + 1
-                if (!answersByRound[roundNumber]) {
-                    answersByRound[roundNumber] = []
+            user.answers.forEach((answer) => {
+                if (answer.questionNumber) {
+                    if (!answersByQuestion[answer.questionNumber]) {
+                        answersByQuestion[answer.questionNumber] = []
+                    }
+                    answersByQuestion[answer.questionNumber].push({
+                        userId: user.id,
+                        userName: user.name || 'N/A',
+                        text: answer.text,
+                        createdAt: answer.createdAt
+                    })
                 }
-                answersByRound[roundNumber].push({
-                    userId: user.id,
-                    userName: user.name || 'N/A',
-                    text: answer.text,
-                    createdAt: answer.createdAt
-                })
             })
         })
         
-        return answersByRound
+        return answersByQuestion
     }
 
     const groupedAnswers = getGroupedAnswers()
-    const maxRounds = Math.max(0, ...Object.keys(groupedAnswers).map(Number))
+    const maxQuestions = Math.max(0, ...Object.keys(groupedAnswers).map(Number))
 
     // Poll for updates every 3 seconds (works reliably on Vercel)
     useEffect(() => {
@@ -103,6 +119,23 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
         }
     }
 
+    const handleShowQuestion = async (questionNumber?: number) => {
+        const qNum = questionNumber ?? nextQuestionNumber
+        setIsSending(true)
+        setMessage('')
+
+        try {
+            await setActiveQuestion(qNum)
+            setMessage(`✅ Question ${qNum} broadcast to all players!`)
+            router.refresh()
+        } catch (error) {
+            console.error('Error showing question:', error)
+            setMessage('❌ Failed to show question')
+        } finally {
+            setIsSending(false)
+        }
+    }
+
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
             <div className="max-w-7xl mx-auto">
@@ -136,6 +169,56 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
                         </div>
                     </div>
                 )}
+
+                {/* Question Controls */}
+                <div className="mb-6 bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                        Question Controls
+                    </h2>
+                    
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                Current Question: {gameState?.currentQuestionNumber ? `#${gameState.currentQuestionNumber}` : 'None'}
+                            </p>
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={nextQuestionNumber}
+                                    onChange={(e) => setNextQuestionNumber(Number(e.target.value))}
+                                    className="px-4 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="Question #"
+                                />
+                                <button
+                                    onClick={() => handleShowQuestion()}
+                                    disabled={isSending}
+                                    className="px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Show Question {nextQuestionNumber}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {gameState?.currentQuestionNumber && (
+                            <button
+                                onClick={() => handleShowQuestion(gameState.currentQuestionNumber! + 1)}
+                                disabled={isSending}
+                                className="px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next Question →
+                            </button>
+                        )}
+                    </div>
+                    
+                    {gameState?.currentQuestionNumber && groupedAnswers[gameState.currentQuestionNumber] && (
+                        <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                            <p className="text-sm text-green-800 dark:text-green-200">
+                                ✓ {groupedAnswers[gameState.currentQuestionNumber].length} / {users.length} users have answered Question {gameState.currentQuestionNumber}
+                            </p>
+                        </div>
+                    )}
+                </div>
 
                 <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 dark:border-zinc-800">
@@ -217,21 +300,28 @@ export default function DashboardClient({ users: initialUsers }: DashboardClient
                 )}
 
                 {/* Answers Grouped by Round/Question */}
-                {maxRounds > 0 && (
+                {maxQuestions > 0 && (
                     <div className="mt-8 space-y-6">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                             Answers by Question
                         </h2>
                         
-                        {Array.from({ length: maxRounds }, (_, i) => i + 1).map(roundNumber => {
-                            const answers = groupedAnswers[roundNumber] || []
+                        {Array.from({ length: maxQuestions }, (_, i) => i + 1).map(questionNumber => {
+                            const answers = groupedAnswers[questionNumber] || []
                             if (answers.length === 0) return null
                             
+                            const isCurrentQuestion = gameState?.currentQuestionNumber === questionNumber
+                            
                             return (
-                                <div key={roundNumber} className="bg-white dark:bg-zinc-900 rounded-lg shadow-md overflow-hidden">
-                                    <div className="px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600">
+                                <div key={questionNumber} className="bg-white dark:bg-zinc-900 rounded-lg shadow-md overflow-hidden">
+                                    <div className={`px-6 py-4 ${
+                                        isCurrentQuestion 
+                                            ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                                            : 'bg-gradient-to-r from-purple-500 to-indigo-600'
+                                    }`}>
                                         <h3 className="text-xl font-bold text-white">
-                                            Question {roundNumber} ({answers.length} {answers.length === 1 ? 'answer' : 'answers'})
+                                            Question {questionNumber} ({answers.length} {answers.length === 1 ? 'answer' : 'answers'})
+                                            {isCurrentQuestion && ' - ACTIVE'}
                                         </h3>
                                     </div>
                                     

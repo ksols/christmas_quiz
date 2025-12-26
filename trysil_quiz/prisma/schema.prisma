@@ -14,9 +14,17 @@ model User {
 }
 
 model Answer {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  text      String
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  id             Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  text           String
+  questionNumber Int?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+}
+
+model GameState {
+  id                    Int      @id @default(autoincrement())
+  currentQuestionNumber Int?
+  status                String   @default("WAITING")
+  updatedAt             DateTime @updatedAt
 }
